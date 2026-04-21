@@ -2,13 +2,23 @@ from __future__ import annotations
 
 import socket
 import time
+import ipaddress
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 
 from .models import PacketEvent
 
 
 class CaptureBackendUnavailable(RuntimeError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureInterface:
+    display_name: str
+    capture_name: str
+    description: str
+    ipv4: str | None = None
 
 
 def get_local_addresses(extra: list[str] | None = None) -> set[str]:
@@ -42,6 +52,41 @@ def list_interfaces() -> list[str]:
             "python -m pip install -e .[live]"
         ) from exc
     return list(get_if_list())
+
+
+def list_interface_details() -> list[CaptureInterface]:
+    try:
+        from scapy.all import get_working_ifaces
+    except ImportError as exc:
+        raise CaptureBackendUnavailable(
+            "Scapy is not installed. Install live capture support with: "
+            "python -m pip install -e .[live]"
+        ) from exc
+
+    details: list[CaptureInterface] = []
+    for iface in get_working_ifaces():
+        capture_name = str(getattr(iface, "network_name", "") or getattr(iface, "name", ""))
+        description = str(getattr(iface, "description", "") or getattr(iface, "name", "") or capture_name)
+        ips = getattr(iface, "ips", {})
+        ipv4_values = []
+        try:
+            ipv4_values = list(ips.get(4, []))
+        except AttributeError:
+            ipv4_values = []
+        ipv4 = ipv4_values[0] if ipv4_values else None
+        label = description
+        if ipv4:
+            label = f"{description}  [{ipv4}]"
+        details.append(
+            CaptureInterface(
+                display_name=label,
+                capture_name=capture_name,
+                description=description,
+                ipv4=ipv4,
+            )
+        )
+
+    return sorted(details, key=_interface_sort_key)
 
 
 class ScapyPacketCapture:
@@ -258,3 +303,34 @@ def _tcp_flags(value: int) -> frozenset[str]:
         0x80: "C",
     }
     return frozenset(flag for bit, flag in mapping.items() if value & bit)
+
+
+def _interface_sort_key(item: CaptureInterface) -> tuple[int, str]:
+    text = item.display_name.lower()
+    if "loopback" in text:
+        return (8, text)
+    if "wan miniport" in text:
+        return (7, text)
+    if "wi-fi direct" in text or "bluetooth" in text:
+        return (6, text)
+    if item.ipv4 and item.ipv4.startswith("169.254."):
+        return (5, text)
+    if "vpn" in text or "hyper-v" in text or "virtual" in text:
+        return (4, text)
+    if item.ipv4 and _is_private_ipv4(item.ipv4):
+        if "wireless" in text or "wi-fi" in text or "wifi" in text:
+            return (0, text)
+        if "ethernet" in text or "realtek" in text or "intel" in text:
+            return (1, text)
+        return (2, text)
+    if item.ipv4:
+        return (3, text)
+    return (9, text)
+
+
+def _is_private_ipv4(ip_value: str) -> bool:
+    try:
+        address = ipaddress.ip_address(ip_value)
+    except ValueError:
+        return False
+    return address.version == 4 and address.is_private

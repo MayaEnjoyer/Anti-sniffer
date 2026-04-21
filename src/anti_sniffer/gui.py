@@ -13,7 +13,7 @@ from .capture import (
     CaptureBackendUnavailable,
     ScapyPacketCapture,
     get_local_addresses,
-    list_interfaces,
+    list_interface_details,
     synthetic_outbound_sweep,
     synthetic_port_scan,
     synthetic_syn_flood,
@@ -58,6 +58,7 @@ class AntiSnifferApp:
         self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
         self.interfaces: list[str] = []
+        self.interface_map: dict[str, str] = {}
 
         self.mode_var = tk.StringVar(value="ids")
         self.interface_var = tk.StringVar(value="")
@@ -331,16 +332,17 @@ class AntiSnifferApp:
         if self.worker and self.worker.is_alive():
             return
 
-        interface = self.interface_var.get().strip()
-        if not interface:
+        selected_interface = self.interface_var.get().strip()
+        if not selected_interface:
             messagebox.showwarning(APP_TITLE, "Select a capture interface first.")
             return
+        capture_interface = self.interface_map.get(selected_interface, selected_interface)
 
         self.stop_event.clear()
         self._set_running(True)
         self._set_banner("Monitoring", level="ok")
 
-        self.worker = threading.Thread(target=self._live_worker, args=(interface,), daemon=True)
+        self.worker = threading.Thread(target=self._live_worker, args=(capture_interface,), daemon=True)
         self.worker.start()
 
     def stop_monitoring(self) -> None:
@@ -498,14 +500,17 @@ class AntiSnifferApp:
 
     def _refresh_interfaces(self, silent: bool = False) -> None:
         try:
-            self.interfaces = list_interfaces()
+            details = list_interface_details()
         except CaptureBackendUnavailable as exc:
             self.interfaces = []
+            self.interface_map = {}
             if not silent:
                 messagebox.showerror(APP_TITLE, str(exc))
             self._set_banner(str(exc), level="critical")
             return
 
+        self.interfaces = [item.display_name for item in details]
+        self.interface_map = {item.display_name: item.capture_name for item in details}
         self.interface_box.configure(values=self.interfaces)
         if self.interfaces and not self.interface_var.get():
             self.interface_var.set(self.interfaces[0])
