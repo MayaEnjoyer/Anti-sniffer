@@ -1,0 +1,26 @@
+[thresholds]
+window_seconds = 10.0
+cooldown_seconds = 30.0
+port_scan_distinct_ports = 12
+port_scan_min_packets = 16
+syn_flood_packets = 80
+mass_request_packets = 120
+icmp_probe_packets = 20
+outbound_unique_hosts = 25
+outbound_unique_ports = 30
+
+[ips]
+enabled = false
+enforce = false
+min_severity = "high"
+block_minutes = 15
+block_outbound = false
+
+[runtime]
+alert_log = "logs/anti_sniffer_alerts.jsonl"
+packet_filter = "ip or ip6"
+trusted_cidrs = [
+    "127.0.0.0/8",
+    "::1/128",
+]
+local_ips = []

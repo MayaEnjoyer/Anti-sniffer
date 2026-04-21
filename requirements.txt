@@ -1,0 +1,4 @@
+# Base project uses only Python standard library.
+# Install live packet capture support with:
+#   python -m pip install -e .[live]
+-e .[live]

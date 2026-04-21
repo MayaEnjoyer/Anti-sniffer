@@ -1,0 +1,26 @@
+[project]
+name = "anti-sniffer"
+version = "1.0.0"
+description = "Real-time IDS/IPS anti-sniffer laboratory project."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+live = [
+    "scapy>=2.5.0",
+]
+test = [
+    "pytest>=8.0.0",
+]
+build = [
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+anti-sniffer = "anti_sniffer.cli:main"
+anti-sniffer-gui = "anti_sniffer.gui:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
